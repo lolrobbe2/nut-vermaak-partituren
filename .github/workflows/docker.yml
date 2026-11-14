@@ -7,6 +7,12 @@ on:
       - main
 
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Build Docker image and deploy to Render'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
