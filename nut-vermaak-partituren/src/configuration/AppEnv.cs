@@ -6,8 +6,14 @@ namespace nut_vermaak_partituren.Configuration;
 #nullable enable
 public static class AppEnv
 {
-    public static void Load()
+    public static void Load(bool isDevelopment)
     {
+        if (!isDevelopment)
+        {
+            Env.Load();
+            return;
+        }
+
         DirectoryInfo? directory =
                     new DirectoryInfo(AppContext.BaseDirectory);
 
