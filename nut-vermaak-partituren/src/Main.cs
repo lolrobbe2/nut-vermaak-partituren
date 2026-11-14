@@ -1,4 +1,4 @@
-using DocumentFormat.OpenXml.Office2010.ExcelAc;
+using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -9,13 +9,18 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using nut_vermaak_partituren.Configuration;
+using nut_vermaak_partituren.FileSystem;
+using nut_vermaak_partituren.Infrastructure.GoogleDrive;
+using nut_vermaak_partituren.Permissions;
 using System;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Claims;
+using System.Threading;
 
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -43,6 +48,46 @@ builder.Services.AddOpenApi();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+
+builder.Services.AddSingleton<Lazy<DriveService>>(
+    (IServiceProvider serviceProvider) =>
+        new Lazy<DriveService>(() =>
+        {
+            string? refreshToken = AppEnv.GoogleDriveRefreshToken;
+
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new InvalidOperationException(
+                    "Google Drive has not been connected yet.");
+            }
+
+            return GoogleDriveServiceFactory.Create(
+                AppEnv.GoogleClientId,
+                AppEnv.GoogleClientSecret,
+                refreshToken,
+                AppEnv.RootAddress,
+                "Nut Vermaak Partituren");
+        }));
+
+
+
+builder.Services.AddSingleton<IFileSystem, GoogleDriveFileSystem>();
+
+builder.Services.AddSingleton<PermissionsService>(
+    (IServiceProvider serviceProvider) =>
+        new PermissionsService(
+            serviceProvider.GetRequiredService<IFileSystem>(),
+            AppEnv.RootAddress,
+            serviceProvider.GetRequiredService<
+                ILogger<PermissionsService>>()));
+
+builder.Services.AddSingleton<IHostedService>(
+    (IServiceProvider serviceProvider) =>
+        serviceProvider.GetRequiredService<PermissionsService>());
+// Register the SAME singleton as a hosted service.
+builder.Services.AddSingleton<IHostedService>(
+    (IServiceProvider serviceProvider) =>
+        serviceProvider.GetRequiredService<PermissionsService>());
 builder.Services.AddBlazorBootstrap();
 
 builder.Services.AddAuthorization();

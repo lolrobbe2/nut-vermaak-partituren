@@ -1,0 +1,156 @@
+﻿@page "/admin/storage/google/refresh-token"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Caching.Memory
+@using nut_vermaak_partituren.Permissions
+
+@inject IMemoryCache MemoryCache
+@inject PermissionsService Permissions
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Google Drive Refresh Token</PageTitle>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-8">
+
+            <h3>Google Drive connected</h3>
+            @if (_loading)
+            {
+                <Spinner />
+            }
+            else if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="alert alert-danger">
+                    @_error
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_refreshToken))
+            {
+                <div class="alert alert-success">
+                    Google Drive authorization succeeded.
+                </div>
+
+                <p>
+                    Authorized account:
+                    <strong>@_rootAddress</strong>
+                </p>
+
+                <label class="form-label">
+                    Google Drive refresh token
+                </label>
+
+                <textarea class="form-control"
+                          rows="5"
+                          readonly>@_refreshToken</textarea>
+
+                <p class="text-muted mt-3">
+                    Copy this token into your Render environment variables
+                    using the name:
+                </p>
+
+                <code>GOOGLE_DRIVE_REFRESH_TOKEN</code>
+
+                <div class="alert alert-warning mt-3">
+                    Keep this token private. Anyone with this token
+                    may access the application's Google Drive storage.
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning">
+                    No valid refresh token was found. Please authorize
+                    Google Drive again.
+                </div>
+
+                <a class="btn btn-primary"
+                   href="/admin/storage/google/connect">
+                    Connect Google Drive
+                </a>
+            }
+
+            <a class="btn btn-outline-secondary mt-3"
+               href="/admin/storage">
+                Back to storage settings
+            </a>
+
+        </div>
+    </div>
+</div>
+
+
+@code {
+    #nullable enable
+    [SupplyParameterFromQuery(Name = "ticket")]
+    public string? Ticket { get; set; }
+
+    private string? _refreshToken;
+    private string? _rootAddress;
+    private string? _error;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await LoadRefreshTokenAsync();
+
+        _loading = false;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadRefreshTokenAsync()
+    {
+        AuthenticationState authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        ClaimsPrincipal user = authenticationState.User;
+
+        string? email =
+            user.FindFirst(ClaimTypes.Email)?.Value ??
+            user.FindFirst("email")?.Value ??
+            user.FindFirst("preferred_username")?.Value ??
+            user.FindFirst(ClaimTypes.Upn)?.Value;
+
+        if (!Permissions.IsRoot(email))
+        {
+            _error = "Only the root administrator can access this page.";
+            return;
+        }
+
+        _rootAddress = email;
+
+        if (string.IsNullOrWhiteSpace(Ticket))
+        {
+            _error = "No authorization ticket was provided.";
+            return;
+        }
+
+        string cacheKey =
+            $"google-drive-refresh-token:{Ticket}";
+
+        if (MemoryCache.TryGetValue(
+            cacheKey,
+            out object? cachedValue) &&
+            cachedValue is string refreshToken)
+        {
+            // One-time ticket: remove immediately after retrieval.
+            MemoryCache.Remove(cacheKey);
+
+            _refreshToken = refreshToken;
+            return;
+        }
+
+        _error =
+            "The authorization ticket is invalid or has expired. " +
+            "Please authorize Google Drive again.";
+    }
+}
+
