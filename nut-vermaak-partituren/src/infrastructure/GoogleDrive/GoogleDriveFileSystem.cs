@@ -34,17 +34,14 @@ public sealed class GoogleDriveFileSystem : IFileSystem
         "id,name,mimeType,driveId,trashed";
 
     private readonly Lazy<DriveService> _driveService;
-    private readonly GoogleDriveSettingsStore _settingsStore;
 
     public GoogleDriveFileSystem(
-        Lazy<DriveService> driveService,
-        GoogleDriveSettingsStore settingsStore)
+        Lazy<DriveService> driveService
+        )
     {
         ArgumentNullException.ThrowIfNull(driveService);
-        ArgumentNullException.ThrowIfNull(settingsStore);
 
         _driveService = driveService;
-        _settingsStore = settingsStore;
     }
 
     public async Task<IReadOnlyList<FileSystemEntry>> ListAsync(

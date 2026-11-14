@@ -70,7 +70,6 @@ builder.Services.AddSingleton<Lazy<DriveService>>(
         }));
 
 
-builder.Services.AddSingleton<GoogleDriveSettingsStore>();
 
 builder.Services.AddSingleton<IFileSystem, GoogleDriveFileSystem>();
 
@@ -78,7 +77,6 @@ builder.Services.AddSingleton<PermissionsService>(
     (IServiceProvider serviceProvider) =>
         new PermissionsService(
             serviceProvider.GetRequiredService<IFileSystem>(),
-            serviceProvider.GetRequiredService<GoogleDriveSettingsStore>(),
             AppEnv.RootAddress,
             serviceProvider.GetRequiredService<
                 ILogger<PermissionsService>>()));

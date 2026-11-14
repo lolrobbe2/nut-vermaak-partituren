@@ -49,20 +49,16 @@ public sealed class PermissionsService : IHostedService
     private string? _usersFileId;
     private DateTimeOffset _lastLoadedAt;
     private bool _loaded;
-    private readonly GoogleDriveSettingsStore _settingsStore;
     public PermissionsService(
         IFileSystem fileSystem,
-        GoogleDriveSettingsStore settingsStore,
         string rootAddress,
         ILogger<PermissionsService> logger)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
-        ArgumentNullException.ThrowIfNull(settingsStore);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentException.ThrowIfNullOrWhiteSpace(rootAddress);
 
         _fileSystem = fileSystem;
-        _settingsStore = settingsStore;
         _logger = logger;
         _rootAddress = NormalizeEmail(rootAddress);
     }
@@ -77,8 +73,8 @@ public sealed class PermissionsService : IHostedService
             return;
         }
 
-        string? rootFolderId =
-            await _settingsStore.GetRootFolderIdAsync(cancellationToken);
+        string? rootFolderId = AppEnv.GoogleDriveRootFolderId;
+           
 
         if (string.IsNullOrWhiteSpace(rootFolderId))
         {
@@ -362,8 +358,8 @@ public sealed class PermissionsService : IHostedService
             return;
         }
 
-        string? rootFolderId =
-            await _settingsStore.GetRootFolderIdAsync(cancellationToken);
+        string? rootFolderId = AppEnv.GoogleDriveRootFolderId;
+            
 
         if (string.IsNullOrWhiteSpace(rootFolderId))
         {
