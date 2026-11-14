@@ -19,10 +19,9 @@ using System.Security.Claims;
 
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
-AppEnv.Load();
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-
+AppEnv.Load(builder.Environment.IsDevelopment());
 builder.Services
     .AddMemoryCache()
     .AddRazorPages()
