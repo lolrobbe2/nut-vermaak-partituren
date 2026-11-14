@@ -3,6 +3,4 @@
 **/.vs/**
 *.json
 *.env
-**.slnx
-**.csproj
 **.user
