@@ -1,0 +1,113 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@using BlazorBootstrap
+@inherits LayoutComponentBase
+
+<div class="min-vh-100 d-flex flex-column">
+
+    <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom shadow-sm">
+        <div class="container-fluid px-3 px-lg-4">
+
+            <!-- Application brand -->
+            <NavLink class="navbar-brand fw-bold" href="/">
+                Nut Vermaak Partituren
+            </NavLink>
+
+            <!-- Mobile navigation toggle -->
+            <button class="navbar-toggler"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#mainNavbar"
+                    aria-controls="mainNavbar"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
+
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- Navigation content -->
+            <div class="collapse navbar-collapse" id="mainNavbar">
+
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                    <li class="nav-item">
+                        <NavLink class="nav-link"
+                                 href="/"
+                                 Match="NavLinkMatch.All">
+                            Home
+                        </NavLink>
+                    </li>
+
+                    <!-- Add more navigation links here -->
+
+                </ul>
+
+                <!-- User section on the right -->
+                <div class="d-flex align-items-center gap-3 ms-auto">
+
+                    <AuthorizeView>
+
+                        <Authorized Context="authState">
+
+                            <div class="d-flex align-items-center gap-2">
+
+                                <span class="small text-body-secondary d-none d-sm-inline">
+                                    @authState.User.Identity?.Name
+                                </span>
+
+                                <span class="d-inline-flex align-items-center
+                                    justify-content-center rounded-circle
+                                    border bg-body text-body"
+                                      style="width: 2.5rem; height: 2.5rem;"
+                                      title="Authenticated account">
+
+                                    @if (authState.User.HasClaim("auth_provider", "google"))
+                                    {
+                                        <i class="bi bi-google fs-5"
+                                           title="Google account"></i>
+                                    }
+                                    else if (authState.User.HasClaim("auth_provider", "microsoft"))
+                                    {
+                                        <i class="bi bi-microsoft fs-5"
+                                           title="Microsoft account"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-person-circle fs-5"
+                                           title="User account"></i>
+                                    }
+
+                                </span>
+
+                            </div>
+
+                        </Authorized>
+
+                        <NotAuthorized>
+
+                            <Button Color="ButtonColor.Primary"
+                                    Type="ButtonType.Link"
+                                    To="/login">
+
+                                <i class="bi bi-box-arrow-in-right me-2"></i>
+                                Sign in
+
+                            </Button>
+
+                        </NotAuthorized>
+
+                    </AuthorizeView>
+
+                </div>
+
+            </div>
+
+        </div>
+    </nav>
+
+    <!-- Page content -->
+    <main class="flex-grow-1">
+        @Body
+    </main>
+
+</div>

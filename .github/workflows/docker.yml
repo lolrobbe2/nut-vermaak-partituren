@@ -1,0 +1,101 @@
+
+name: Build and Deploy Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ==========================================
+      # Checkout
+      # ==========================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ==========================================
+      # Premake 5.0.0-beta8
+      # ==========================================
+      - name: Install Premake 5.0.0-beta8
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-linux.tar.gz \
+            --output "$RUNNER_TEMP/premake.tar.gz"
+
+          mkdir -p "$RUNNER_TEMP/premake"
+
+          tar -xzf "$RUNNER_TEMP/premake.tar.gz" \
+            -C "$RUNNER_TEMP/premake"
+
+          chmod +x "$RUNNER_TEMP/premake/premake5"
+
+          echo "$RUNNER_TEMP/premake" >> "$GITHUB_PATH"
+
+      # ==========================================
+      # Generate Visual Studio Solution
+      # ==========================================
+      - name: Generate solution with Premake
+        run: |
+          premake5 --version
+          premake5 vs2026
+
+      # ==========================================
+      # Docker Build
+      # ==========================================
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # ==========================================
+      # Render Deployment
+      # ==========================================
+      - name: Trigger Render deployment
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK is not configured."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            --request POST "$RENDER_DEPLOY_HOOK"
