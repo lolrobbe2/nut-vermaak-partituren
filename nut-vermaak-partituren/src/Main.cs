@@ -10,9 +10,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using nut_vermaak_partituren.Configuration;
 using nut_vermaak_partituren.FileSystem;
 using nut_vermaak_partituren.Infrastructure.GoogleDrive;
+using nut_vermaak_partituren.Permissions;
 using System;
 using System.IO;
 using System.Linq;
@@ -48,22 +50,33 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<DriveService>(_ =>
 {
     return GoogleDriveServiceFactory.Create(
-        AppEnv.GoogleDriveClientEmail,
-        AppEnv.GoogleDrivePrivateKey,
+        AppEnv.GoogleClientId,
+        AppEnv.GoogleClientSecret,
+        AppEnv.GoogleDriveRefreshToken,
+        AppEnv.RootAddress,
         "Nut Vermaak Partituren");
 });
 
 builder.Services.AddSingleton<IFileSystem>(serviceProvider =>
 {
-    DriveService driveService =
-        serviceProvider.GetRequiredService<DriveService>();
-
-    string rootFolderId = AppEnv.GoogleDriveRootFolderId;
-
     return new GoogleDriveFileSystem(
-        driveService,
-        rootFolderId);
+        serviceProvider.GetRequiredService<DriveService>(),
+        AppEnv.GoogleDriveRootFolderId);
 });
+builder.Services.AddSingleton(
+    serviceProvider =>
+    {
+        return new PermissionsService(
+            serviceProvider.GetRequiredService<IFileSystem>(),
+            AppEnv.RootAddress,
+            serviceProvider.GetRequiredService<
+                ILogger<PermissionsService>>());
+    });
+
+// Register the same singleton as a hosted service.
+builder.Services.AddSingleton<IHostedService>(
+    serviceProvider =>
+        serviceProvider.GetRequiredService<PermissionsService>());
 builder.Services.AddBlazorBootstrap();
 
 builder.Services.AddAuthorization();

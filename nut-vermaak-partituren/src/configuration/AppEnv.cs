@@ -60,9 +60,13 @@ public static class AppEnv
     public static string GoogleDrivePrivateKey =>
         GetRequired("GOOGLE_DRIVE_PRIVATE_KEY")
             .Replace("\\n", "\n", StringComparison.Ordinal);
-
+    public static string RootAddress =>
+        GetRequired("ROOT_ADDR");
     public static string GoogleDriveRootFolderId =>
         GetRequired("GOOGLE_DRIVE_ROOT_FOLDER_ID");
+    public static string GoogleDriveRedirectUri =>
+        GetRequired("GOOGLE_DRIVE_REDIRECT_URI");
+
     private static string GetRequired(string key)
     {
         string? value = Environment.GetEnvironmentVariable(key);
