@@ -1,4 +1,5 @@
 using DocumentFormat.OpenXml.Office2010.ExcelAc;
+using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -10,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using nut_vermaak_partituren.Configuration;
+using nut_vermaak_partituren.FileSystem;
+using nut_vermaak_partituren.Infrastructure.GoogleDrive;
 using System;
 using System.IO;
 using System.Linq;
@@ -42,7 +45,25 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddSingleton<DriveService>(_ =>
+{
+    return GoogleDriveServiceFactory.Create(
+        AppEnv.GoogleDriveClientEmail,
+        AppEnv.GoogleDrivePrivateKey,
+        "Nut Vermaak Partituren");
+});
 
+builder.Services.AddSingleton<IFileSystem>(serviceProvider =>
+{
+    DriveService driveService =
+        serviceProvider.GetRequiredService<DriveService>();
+
+    string rootFolderId = AppEnv.GoogleDriveRootFolderId;
+
+    return new GoogleDriveFileSystem(
+        driveService,
+        rootFolderId);
+});
 builder.Services.AddBlazorBootstrap();
 
 builder.Services.AddAuthorization();
