@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using DriveFile = Google.Apis.Drive.v3.Data.File;
+using nut_vermaak_partituren.Configuration;
 
 #nullable enable
 
@@ -32,42 +33,36 @@ public sealed class GoogleDriveFileSystem : IFileSystem
     private const string RootFolderFields =
         "id,name,mimeType,driveId,trashed";
 
-    private readonly DriveService _driveService;
-    private readonly string _rootFolderId;
-    private readonly SemaphoreSlim _sharedDriveLock = new(1, 1);
-
-    private string? _sharedDriveId;
+    private readonly Lazy<DriveService> _driveService;
+    private readonly GoogleDriveSettingsStore _settingsStore;
 
     public GoogleDriveFileSystem(
-        DriveService driveService,
-        string rootFolderId)
+        Lazy<DriveService> driveService,
+        GoogleDriveSettingsStore settingsStore)
     {
         ArgumentNullException.ThrowIfNull(driveService);
-        ArgumentException.ThrowIfNullOrWhiteSpace(rootFolderId);
+        ArgumentNullException.ThrowIfNull(settingsStore);
 
         _driveService = driveService;
-        _rootFolderId = rootFolderId;
+        _settingsStore = settingsStore;
     }
 
     public async Task<IReadOnlyList<FileSystemEntry>> ListAsync(
-        string? parentFolderId = null,
-        CancellationToken cancellationToken = default)
+     string? parentFolderId = null,
+     CancellationToken cancellationToken = default)
     {
         string resolvedParentId = ResolveParentFolderId(parentFolderId);
-        string sharedDriveId = await GetSharedDriveIdAsync(cancellationToken);
 
-        FilesResource.ListRequest request = _driveService.Files.List();
+        FilesResource.ListRequest request =
+            _driveService.Value.Files.List();
+
         request.Q =
             $"'{EscapeQueryValue(resolvedParentId)}' in parents and trashed = false";
+
         request.Fields = $"nextPageToken,files({FileFields})";
         request.PageSize = 1000;
         request.OrderBy = "name";
-
-        // Restrict listing to the Shared Drive containing the configured root folder.
-        request.Corpora = "drive";
-        request.DriveId = sharedDriveId;
-        request.SupportsAllDrives = true;
-        request.IncludeItemsFromAllDrives = true;
+        request.Corpora = "user";
 
         List<FileSystemEntry> entries = new();
 
@@ -97,9 +92,8 @@ public sealed class GoogleDriveFileSystem : IFileSystem
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fileId);
 
-        FilesResource.GetRequest request = _driveService.Files.Get(fileId);
+        FilesResource.GetRequest request = _driveService.Value.Files.Get(fileId);
         request.Fields = FileFields;
-        request.SupportsAllDrives = true;
 
         try
         {
@@ -123,7 +117,7 @@ public sealed class GoogleDriveFileSystem : IFileSystem
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         string resolvedParentId = ResolveParentFolderId(parentFolderId);
-        await GetSharedDriveIdAsync(cancellationToken);
+        
 
         DriveFile metadata = new()
         {
@@ -136,9 +130,9 @@ public sealed class GoogleDriveFileSystem : IFileSystem
         };
 
         FilesResource.CreateRequest request =
-            _driveService.Files.Create(metadata);
+            _driveService.Value.Files.Create(metadata);
         request.Fields = FileFields;
-        request.SupportsAllDrives = true;
+        
 
         DriveFile created =
             await request.ExecuteAsync(cancellationToken);
@@ -165,7 +159,7 @@ public sealed class GoogleDriveFileSystem : IFileSystem
         }
 
         string resolvedParentId = ResolveParentFolderId(parentFolderId);
-        await GetSharedDriveIdAsync(cancellationToken);
+        
 
         DriveFile metadata = new()
         {
@@ -178,9 +172,9 @@ public sealed class GoogleDriveFileSystem : IFileSystem
         };
 
         FilesResource.CreateMediaUpload request =
-            _driveService.Files.Create(metadata, content, contentType);
+            _driveService.Value.Files.Create(metadata, content, contentType);
         request.Fields = FileFields;
-        request.SupportsAllDrives = true;
+        
 
         IUploadProgress progress =
             await request.UploadAsync(cancellationToken);
@@ -213,19 +207,19 @@ public sealed class GoogleDriveFileSystem : IFileSystem
                 nameof(content));
         }
 
-        await GetSharedDriveIdAsync(cancellationToken);
+        
 
         DriveFile metadata = new();
 
         FilesResource.UpdateMediaUpload request =
-            _driveService.Files.Update(
+            _driveService.Value.Files.Update(
                 metadata,
                 fileId,
                 content,
                 contentType);
 
         request.Fields = FileFields;
-        request.SupportsAllDrives = true;
+        
 
         IUploadProgress progress =
             await request.UploadAsync(cancellationToken);
@@ -256,10 +250,10 @@ public sealed class GoogleDriveFileSystem : IFileSystem
                 nameof(destination));
         }
 
-        await GetSharedDriveIdAsync(cancellationToken);
+        
 
-        FilesResource.GetRequest request = _driveService.Files.Get(fileId);
-        request.SupportsAllDrives = true;
+        FilesResource.GetRequest request = _driveService.Value.Files.Get(fileId);
+        
 
         IDownloadProgress progress =
             await request.DownloadAsync(destination, cancellationToken);
@@ -279,18 +273,18 @@ public sealed class GoogleDriveFileSystem : IFileSystem
 
         if (string.Equals(
             fileId,
-            _rootFolderId,
+            AppEnv.GoogleDriveRootFolderId,
             StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 "The configured Google Drive root folder cannot be deleted.");
         }
 
-        await GetSharedDriveIdAsync(cancellationToken);
+        
 
         FilesResource.DeleteRequest request =
-            _driveService.Files.Delete(fileId);
-        request.SupportsAllDrives = true;
+            _driveService.Value.Files.Delete(fileId);
+        
 
         await request.ExecuteAsync(cancellationToken);
     }
@@ -298,69 +292,10 @@ public sealed class GoogleDriveFileSystem : IFileSystem
     private string ResolveParentFolderId(string? parentFolderId)
     {
         return string.IsNullOrWhiteSpace(parentFolderId)
-            ? _rootFolderId
+            ? AppEnv.GoogleDriveRootFolderId
             : parentFolderId;
     }
 
-    /// <summary>
-    /// Loads and validates the Shared Drive containing the configured root folder.
-    /// The Drive ID is cached for subsequent listing operations.
-    /// </summary>
-    private async Task<string> GetSharedDriveIdAsync(
-        CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrWhiteSpace(_sharedDriveId))
-        {
-            return _sharedDriveId;
-        }
-
-        await _sharedDriveLock.WaitAsync(cancellationToken);
-
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(_sharedDriveId))
-            {
-                return _sharedDriveId;
-            }
-
-            FilesResource.GetRequest request =
-                _driveService.Files.Get(_rootFolderId);
-            request.Fields = RootFolderFields;
-            request.SupportsAllDrives = true;
-
-            DriveFile rootFolder =
-                await request.ExecuteAsync(cancellationToken);
-
-            if (rootFolder.Trashed == true)
-            {
-                throw new InvalidOperationException(
-                    "The configured Google Drive root folder is in the trash.");
-            }
-
-            if (!string.Equals(
-                rootFolder.MimeType,
-                FolderMimeType,
-                StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "GOOGLE_DRIVE_ROOT_FOLDER_ID must identify a folder.");
-            }
-
-            if (string.IsNullOrWhiteSpace(rootFolder.DriveId))
-            {
-                throw new InvalidOperationException(
-                    "The configured folder is not inside a Google Shared Drive. " +
-                    "A service account storage root must be in a Shared Drive.");
-            }
-
-            _sharedDriveId = rootFolder.DriveId;
-            return _sharedDriveId;
-        }
-        finally
-        {
-            _sharedDriveLock.Release();
-        }
-    }
 
     private static void EnsureUploadCompleted(IUploadProgress progress)
     {

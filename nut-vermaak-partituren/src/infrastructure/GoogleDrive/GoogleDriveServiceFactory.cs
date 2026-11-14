@@ -22,6 +22,7 @@ public static class GoogleDriveServiceFactory
         ArgumentException.ThrowIfNullOrWhiteSpace(clientSecret);
         ArgumentException.ThrowIfNullOrWhiteSpace(refreshToken);
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerEmail);
+        ArgumentException.ThrowIfNullOrWhiteSpace(applicationName);
 
         GoogleAuthorizationCodeFlow flow =
             new(new GoogleAuthorizationCodeFlow.Initializer
@@ -34,7 +35,8 @@ public static class GoogleDriveServiceFactory
 
                 Scopes = new[]
                 {
-                    DriveService.Scope.DriveFile
+                    DriveService.Scope.DriveFile,
+                    "https://www.googleapis.com/auth/drive.appdata"
                 },
 
                 DataStore = new NullDataStore()

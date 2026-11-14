@@ -52,11 +52,12 @@ public static class AppEnv
 
     public static string MicrosoftClientSecret =>
         GetRequired("MICROSOFT_CLIENT_SECRET");
-    public static string GoogleDriveRefreshToken =>
-        GetRequired("GOOGLE_DRIVE_REFRESH_TOKEN");
+    public static string? GoogleDriveRefreshToken =>
+        Environment.GetEnvironmentVariable("GOOGLE_DRIVE_REFRESH_TOKEN");
     public static string GoogleDriveClientEmail =>
         GetRequired("GOOGLE_DRIVE_CLIENT_EMAIL");
-
+    public static bool HasGoogleDriveRefreshToken =>
+        !string.IsNullOrWhiteSpace(GoogleDriveRefreshToken);
     public static string GoogleDrivePrivateKey =>
         GetRequired("GOOGLE_DRIVE_PRIVATE_KEY")
             .Replace("\\n", "\n", StringComparison.Ordinal);

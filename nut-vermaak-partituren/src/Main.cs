@@ -1,4 +1,3 @@
-using DocumentFormat.OpenXml.Office2010.ExcelAc;
 using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -21,6 +20,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Security.Claims;
+using System.Threading;
 
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -47,35 +47,48 @@ builder.Services.AddOpenApi();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-builder.Services.AddSingleton<DriveService>(_ =>
-{
-    return GoogleDriveServiceFactory.Create(
-        AppEnv.GoogleClientId,
-        AppEnv.GoogleClientSecret,
-        AppEnv.GoogleDriveRefreshToken,
-        AppEnv.RootAddress,
-        "Nut Vermaak Partituren");
-});
 
-builder.Services.AddSingleton<IFileSystem>(serviceProvider =>
-{
-    return new GoogleDriveFileSystem(
-        serviceProvider.GetRequiredService<DriveService>(),
-        AppEnv.GoogleDriveRootFolderId);
-});
-builder.Services.AddSingleton(
-    serviceProvider =>
-    {
-        return new PermissionsService(
+
+builder.Services.AddSingleton<Lazy<DriveService>>(
+    (IServiceProvider serviceProvider) =>
+        new Lazy<DriveService>(() =>
+        {
+            string? refreshToken = AppEnv.GoogleDriveRefreshToken;
+
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new InvalidOperationException(
+                    "Google Drive has not been connected yet.");
+            }
+
+            return GoogleDriveServiceFactory.Create(
+                AppEnv.GoogleClientId,
+                AppEnv.GoogleClientSecret,
+                refreshToken,
+                AppEnv.RootAddress,
+                "Nut Vermaak Partituren");
+        }));
+
+
+builder.Services.AddSingleton<GoogleDriveSettingsStore>();
+
+builder.Services.AddSingleton<IFileSystem, GoogleDriveFileSystem>();
+
+builder.Services.AddSingleton<PermissionsService>(
+    (IServiceProvider serviceProvider) =>
+        new PermissionsService(
             serviceProvider.GetRequiredService<IFileSystem>(),
+            serviceProvider.GetRequiredService<GoogleDriveSettingsStore>(),
             AppEnv.RootAddress,
             serviceProvider.GetRequiredService<
-                ILogger<PermissionsService>>());
-    });
+                ILogger<PermissionsService>>()));
 
-// Register the same singleton as a hosted service.
 builder.Services.AddSingleton<IHostedService>(
-    serviceProvider =>
+    (IServiceProvider serviceProvider) =>
+        serviceProvider.GetRequiredService<PermissionsService>());
+// Register the SAME singleton as a hosted service.
+builder.Services.AddSingleton<IHostedService>(
+    (IServiceProvider serviceProvider) =>
         serviceProvider.GetRequiredService<PermissionsService>());
 builder.Services.AddBlazorBootstrap();
 

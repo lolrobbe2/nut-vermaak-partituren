@@ -1,0 +1,33 @@
+﻿@page "/admin/storage"
+@using BlazorBootstrap
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject NavigationManager Navigation
+
+<PageTitle>Google Drive Storage</PageTitle>
+
+<h3>Google Drive Storage</h3>
+
+<Alert Color="AlertColor.Info">
+    Connect the Google account configured in ROOT_ADDR to authorize
+    the application's central storage.
+</Alert>
+
+<p>
+    The root administrator must authorize Google Drive once.
+    This is independent of normal user login.
+</p>
+
+<Button Color="ButtonColor.Primary"
+        @onclick="ConnectGoogleDrive">
+    <Icon Name="IconName.Google" />
+    Connect root Google account
+</Button>
+
+@code {
+    private void ConnectGoogleDrive()
+    {
+        Navigation.NavigateTo(
+            "/admin/storage/google/connect",
+            forceLoad: true);
+    }
+}

@@ -1,9 +1,11 @@
-﻿
+﻿#nullable enable
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using nut_vermaak_partituren.Configuration;
 using nut_vermaak_partituren.FileSystem;
+using nut_vermaak_partituren.Infrastructure.GoogleDrive;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -47,24 +49,48 @@ public sealed class PermissionsService : IHostedService
     private string? _usersFileId;
     private DateTimeOffset _lastLoadedAt;
     private bool _loaded;
-
+    private readonly GoogleDriveSettingsStore _settingsStore;
     public PermissionsService(
         IFileSystem fileSystem,
+        GoogleDriveSettingsStore settingsStore,
         string rootAddress,
         ILogger<PermissionsService> logger)
     {
         ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(settingsStore);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentException.ThrowIfNullOrWhiteSpace(rootAddress);
 
         _fileSystem = fileSystem;
+        _settingsStore = settingsStore;
         _logger = logger;
         _rootAddress = NormalizeEmail(rootAddress);
     }
 
-    // Automatically initialize users.csv when the application starts.
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        if (!AppEnv.HasGoogleDriveRefreshToken)
+        {
+            _logger.LogInformation(
+                "PermissionsService started. Waiting for Google Drive authorization.");
+
+            return;
+        }
+
+        string? rootFolderId =
+            await _settingsStore.GetRootFolderIdAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(rootFolderId))
+        {
+            _logger.LogInformation(
+                "Google Drive is authorized, but no storage folder has been selected yet.");
+
+            return;
+        }
+
+        _logger.LogInformation(
+            "Google Drive is configured. Initializing permissions.");
+
         await ReloadAsync(cancellationToken);
     }
 
@@ -330,6 +356,24 @@ public sealed class PermissionsService : IHostedService
         {
             return;
         }
+
+        if (!AppEnv.HasGoogleDriveRefreshToken)
+        {
+            return;
+        }
+
+        string? rootFolderId =
+            await _settingsStore.GetRootFolderIdAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(rootFolderId))
+        {
+            _logger.LogDebug(
+                "Permissions cannot be loaded because no storage folder is configured.");
+
+            return;
+        }
+
+        // Keep the rest of your existing implementation unchanged.
 
         IReadOnlyList<FileSystemEntry> files =
             await _fileSystem.ListAsync(
