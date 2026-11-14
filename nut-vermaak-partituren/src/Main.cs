@@ -143,7 +143,18 @@ builder.Services
             CookieAuthenticationDefaults.AuthenticationScheme;
         options.CallbackPath = "/signin-microsoft";
     });
+builder.Services.Configure<ForwardedHeadersOptions>(
+    options =>
+    {
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto |
+            ForwardedHeaders.XForwardedHost;
 
+        // Render uses dynamic proxy IP addresses.
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
 WebApplication host = builder.Build();
 
 if (host.Environment.IsDevelopment())
@@ -155,7 +166,7 @@ if (host.Environment.IsDevelopment())
         options.SwaggerEndpoint("/openapi/v1.json", "VOID api");
     });
 }
-
+host.UseForwardedHeaders();
 // Middleware
 host.UseHttpsRedirection();
 host.UseStaticFiles();
